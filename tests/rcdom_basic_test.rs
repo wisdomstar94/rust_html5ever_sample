@@ -1,6 +1,6 @@
-use html5ever::{namespace_url, ns, parse_document, serialize::{serialize, SerializeOpts}, tendril::{StrTendril, TendrilSink}, Attribute, LocalName, QualName};
+use html5ever::{namespace_url, parse_document, serialize::{serialize, SerializeOpts}, tendril::{StrTendril, TendrilSink}, Attribute, LocalName, QualName};
 use markup5ever_rcdom::{Node, RcDom, SerializableHandle};
-use std::{cell::RefCell, ops::Deref, rc::Rc};
+use std::{ops::{Deref, DerefMut}, rc::Rc};
 use html5ever::interface::tree_builder::TreeSink;
 
 fn add_attr(node: &Rc<Node>, attr_name: &str, attr_value: &str) {
@@ -20,17 +20,60 @@ fn add_attr(node: &Rc<Node>, attr_name: &str, attr_value: &str) {
   ]);
 }
 
-fn get_attrs(attrs_refcell: &RefCell<Vec<Attribute>>) -> Vec<(String, String)> {
-  let mut vec: Vec<(String, String)> = Vec::new();
-  let binding = attrs_refcell.borrow();
-  let attrs = binding.deref();
-  for attr in attrs {
-    let name = attr.name.local.to_string();
-    let value = attr.value.to_string();
-    vec.push((name, value));
-  }
-  vec
+// fn get_attrs<'a>(attrs_refcell: &'a RefCell<Vec<Attribute>>) -> Vec<(&'a Attribute, String, String)> {
+//   let mut vec: Vec<(&'a Attribute, String, String)> = Vec::new();
+//   // let binding = attrs_refcell.borrow();
+//   let k: std::cell::Ref<'a, Vec<Attribute>> = attrs_refcell.borrow();
+//   let attrs = k.deref();
+//   for attr in attrs {
+//     let name = attr.name.local.to_string();
+//     let value = attr.value.to_string();
+//     vec.push((attr, name, value));
+//   }
+//   vec
+// }
+
+fn get_attr_name_and_value(attribute: &Attribute) -> (String, String) {
+  let name = attribute.name.local.to_string();
+  let value = attribute.value.to_string();
+  (name, value)
 }
+
+// fn parse_attr<'a>(attrs: &'a mut Vec<Attribute>) -> Vec<(&'a mut Attribute, String, String)> {
+//   let mut vec: Vec<(&'a mut Attribute, String, String)> = Vec::new();
+//   for attribute in attrs.deref_mut() {
+//     let name = attribute.name.local.to_string();
+//     let value = attribute.value.to_string();
+//     vec.push((attribute, name, value));
+//   }
+//   vec
+// }
+
+// fn parse_attr<'a>(attrs: &'a mut Vec<Attribute>) -> Vec<(&'a mut Attribute, String, String)> {
+//   // let k = attrs.deref();
+//   // let mut attr_mutable_list = k;
+
+//   let mut vec: Vec<(&'a mut Attribute, String, String)> = Vec::new();
+//   // let list = &mut *attrs;
+//   for attribute in attrs {
+//     let name = attribute.name.local.to_string();
+//     let value = attribute.value.to_string();
+//     vec.push((attribute, name, value));
+//   }
+//   vec
+// }
+
+// fn parse_attr<'a>(attrs: &'a RefCell<Vec<Attribute>>) -> Vec<(&'a Attribute, String, String)> {
+//   let mut vec: Vec<(&'a Attribute, String, String)> = Vec::new();
+//   let k: Ref<'_, Vec<Attribute>> = attrs.borrow();
+//   let list = k.deref();
+//   for attribute in list {
+//     let name = attribute.name.local.to_string();
+//     let value = attribute.value.to_string();
+//     vec.push((attribute, name, value));
+//   }
+//   vec
+// }
 
 #[test]
 fn rcdom_basic_test() {
@@ -62,39 +105,23 @@ fn rcdom_basic_test() {
   let document = document_rc.as_ref();
   let binding = document.children.borrow();
   let html = binding.deref().last().unwrap().as_ref();
-  // for item in document.children.borrow().deref() {
-  //   let n = item.as_ref();
-  //   match &n.data {
-  //       markup5ever_rcdom::NodeData::Document => {
-  //         println!("Document")
-  //       },
-  //       markup5ever_rcdom::NodeData::Doctype { name, public_id, system_id } => {
-  //         println!("Doctype")
-  //       },
-  //       markup5ever_rcdom::NodeData::Text { contents } => {
-  //         println!("Text")
-  //       },
-  //       markup5ever_rcdom::NodeData::Comment { contents } => {
-  //         println!("Comment")
-  //       },
-  //       markup5ever_rcdom::NodeData::Element { name, attrs, template_contents, mathml_annotation_xml_integration_point } => {
-  //         println!("Element")
-  //       },
-  //       markup5ever_rcdom::NodeData::ProcessingInstruction { target, contents } => {
-  //         println!("ProcessingInstruction")
-  //       },
-  //   }
-  // }
 
   let binding = html.children.borrow();
   let body_rc = binding.last().unwrap();
   let body = body_rc.as_ref();
   if let markup5ever_rcdom::NodeData::Element{ name, attrs, template_contents, mathml_annotation_xml_integration_point } = &body.data {
     add_attr(body_rc, "attr1", "my-value");
-    let attr_list = get_attrs(attrs);
-    println!("attr_list: {:#?}", attr_list);
+    
+    let mut binding = attrs.borrow_mut();
+    let attr_mut_vec = binding.deref_mut();
+    for attribute in attr_mut_vec {
+      let (name, value) = get_attr_name_and_value(&attribute);
+      if name == "attr1" {
+        attribute.value.clear();
+        attribute.value.push_tendril(&From::from("수정~"));
+      }
+    }
   }
-
 
   let document: SerializableHandle = dom.document.clone().into();
   let mut bytes = vec![];
