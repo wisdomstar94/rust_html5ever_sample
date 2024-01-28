@@ -1,0 +1,11 @@
+[package]
+name = "rust_html5ever_sample"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+html5ever = "0.26.0"
+markup5ever_rcdom = "0.2.0"
+typed-arena = "2.0.2"
