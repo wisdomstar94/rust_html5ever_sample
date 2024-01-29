@@ -59,6 +59,14 @@ fn get_attr_name_and_value(attribute: &Attribute) -> (String, String) {
   (name, value)
 }
 
+fn convert_node_to_html_string(node: &Rc<Node>) -> String {
+  let mut bytes = vec![];
+  let node_handle: SerializableHandle = node.clone().into();
+  serialize(&mut bytes, &node_handle, SerializeOpts::default()).unwrap();
+  let result = String::from_utf8(bytes).unwrap();
+  result
+}
+
 fn walk(depth: usize, handle: &Handle, vec: Rc<RefCell<Vec<(usize, Rc<Node>)>>>, search_element_name: &str, search_attr_list: &Option<&Vec<(&str, &str)>>) {
   let node = handle;
   match node.data {
@@ -139,42 +147,8 @@ fn rcdom_basic_test() {
     .read_from(&mut html.as_bytes())
     .unwrap()
   ;
+  let document = dom.get_document();
 
-  // let document = dom.document.borrow();
-
-  let document_rc = dom.get_document();
-  let document = document_rc.as_ref();
-  let binding = document.children.borrow();
-  let html = binding.deref().last().unwrap().as_ref();
-
-  let binding = html.children.borrow();
-  let body_rc = binding.last().unwrap();
-  let body = body_rc.as_ref();
-  if let markup5ever_rcdom::NodeData::Element{ name, attrs, template_contents: _, mathml_annotation_xml_integration_point: _ } = &body.data {
-    println!("name: {}", name.local.to_string());
-    add_attr(body_rc, "attr1", "my-value");
-
-    let mut binding = attrs.borrow_mut();
-    let attr_mut_vec = binding.deref_mut();
-    for attribute in attr_mut_vec {
-      let (name, _) = get_attr_name_and_value(&attribute);
-      if name == "attr1" {
-        attribute.value.clear();
-        attribute.value.push_tendril(&From::from("수정~"));
-      }
-    }
-  }
-
-  let k = node_select(body_rc, "my-element", &None);
-  let vec = k.deref().borrow();
-  for item in vec.iter() {
-    println!("item: {:#?}", item);
-    modify_attr(&item.1, "data-value", r#"공"휴"일"#, true);
-  }
-
-  let document: SerializableHandle = dom.document.clone().into();
-  let mut bytes = vec![];
-  serialize(&mut bytes, &document, SerializeOpts::default()).unwrap();
-  let result = String::from_utf8(bytes).unwrap();
-  println!("result:  {:#?}", result);
+  let result = convert_node_to_html_string(&document);
+  println!("result: {:#?}", result);
 }
