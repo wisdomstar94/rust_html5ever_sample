@@ -1,6 +1,6 @@
-use html5ever::{namespace_url, parse_document, serialize::{serialize, SerializeOpts}, tendril::{StrTendril, TendrilSink}, Attribute, LocalName, QualName};
+use html5ever::{namespace_url, parse_document, serialize::{serialize, SerializeOpts}, tendril::{StrTendril, TendrilSink}, tree_builder::ElementFlags, Attribute, LocalName, QualName};
 use markup5ever_rcdom::{Handle, Node, NodeData, RcDom, SerializableHandle};
-use std::{cell::RefCell, ops::{Deref, DerefMut}, rc::Rc};
+use std::{borrow::Borrow, cell::RefCell, ops::{Deref, DerefMut}, rc::Rc};
 use html5ever::interface::tree_builder::TreeSink;
 
 fn add_attr(node: &Rc<Node>, attr_name: &str, attr_value: &str) {
@@ -137,6 +137,41 @@ fn node_delete(target_node: &Rc<Node>) {
   RcDom::default().remove_from_parent(target_node);
 }
 
+fn node_create(element_name: &str, attr_list: &Option<&Vec<(&str, &str)>>) -> Rc<Node> {
+  let qual = QualName::new(
+    None,
+    namespace_url!(""),
+    LocalName::from(element_name),
+  );
+  let attrs: Vec<Attribute> = if let Some(v) = attr_list {
+    v.iter().map(|x| -> Attribute {
+      let attr_qual = QualName::new(
+        None,
+        namespace_url!(""),
+        LocalName::from(x.0),
+      );  
+      let mut tendril = StrTendril::new();
+      tendril.push_tendril(&From::from(x.1));
+      Attribute { name: attr_qual, value: tendril }
+    }).collect()
+  } else {
+    vec![]
+  };
+  let flags: ElementFlags = ElementFlags::default();
+  RcDom::default().create_element(qual, attrs, flags)
+}
+
+fn node_parent(target_node: &Rc<Node>) -> Option<Rc<Node>> {
+  let mut result: Option<Rc<Node>> = None;
+  let binding = &target_node.parent.take();
+  if let Some(b) = binding {
+    if let Some(k) = b.upgrade() {
+      result = Some(k);
+    }
+  }
+  result
+}
+
 #[test]
 fn rcdom_basic_test() {
   let html = r#"
@@ -162,10 +197,11 @@ fn rcdom_basic_test() {
   ;
   let document = dom.get_document();
 
-  let node = node_select_one(&document, "my-element", &None);
-  if let Some(n) = node {
-    node_delete(&n);
-  }
+  let node = node_select_one(&document, "body", &None);
+  let k = node.unwrap();
+  // let parent = node_parent(&k).unwrap();
+  let result = convert_node_to_html_string(&k);
+  println!("@@result {}", result);
 
   let result = convert_node_to_html_string(&document);
   println!("result: {}", result);
