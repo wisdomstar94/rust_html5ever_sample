@@ -124,6 +124,19 @@ fn node_select(target_node: &Rc<Node>, search_element_name: &str, search_attr_li
   vec
 }
 
+fn node_select_one(target_node: &Rc<Node>, search_element_name: &str, search_attr_list: &Option<&Vec<(&str, &str)>>) -> Option<Rc<Node>> {
+  let mut result: Option<Rc<Node>> = None;
+  let vec = node_select(target_node, search_element_name, search_attr_list);
+  if let Some(v) = vec.deref().borrow().first() {
+    result = Some(v.1.clone());
+  }
+  result
+}
+
+fn node_delete(target_node: &Rc<Node>) {
+  RcDom::default().remove_from_parent(target_node);
+}
+
 #[test]
 fn rcdom_basic_test() {
   let html = r#"
@@ -148,6 +161,11 @@ fn rcdom_basic_test() {
     .unwrap()
   ;
   let document = dom.get_document();
+
+  let node = node_select_one(&document, "my-element", &None);
+  if let Some(n) = node {
+    node_delete(&n);
+  }
 
   let result = convert_node_to_html_string(&document);
   println!("result: {}", result);
