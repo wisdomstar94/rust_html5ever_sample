@@ -20,6 +20,39 @@ fn add_attr(node: &Rc<Node>, attr_name: &str, attr_value: &str) {
   ]);
 }
 
+fn modify_attr(node: &Rc<Node>, attr_name: &str, attr_value: &str, if_empty_append: bool) {
+  let node_clone = node.clone();
+  if let markup5ever_rcdom::NodeData::Element{ name: _, attrs, template_contents: _, mathml_annotation_xml_integration_point: _ } = &node_clone.data {
+    let mut is_modified = false;
+    for attribute in attrs.borrow_mut().iter_mut() {
+      let name = &attribute.name.local.to_string();
+      // let value = &attribute.value;
+      if name == attr_name {
+        is_modified = true;
+        attribute.value.clear();
+        attribute.value.push_tendril(&From::from(attr_value));
+        break;
+      }
+    }
+
+    if !is_modified && if_empty_append {
+      let qual = QualName::new(
+        None,
+        namespace_url!(""),
+        LocalName::from(attr_name),
+      );
+      let mut tendril = StrTendril::new();
+      tendril.push_tendril(&From::from(attr_value));
+      RcDom::default().add_attrs_if_missing(node, vec![
+        Attribute {
+          name: qual,
+          value: tendril,
+        }
+      ]);
+    }
+  }
+}
+
 fn get_attr_name_and_value(attribute: &Attribute) -> (String, String) {
   let name = attribute.name.local.to_string();
   let value = attribute.value.to_string();
@@ -136,6 +169,7 @@ fn rcdom_basic_test() {
   let vec = k.deref().borrow();
   for item in vec.iter() {
     println!("item: {:#?}", item);
+    modify_attr(&item.1, "data-value", r#"공"휴"일"#, true);
   }
 
   let document: SerializableHandle = dom.document.clone().into();
