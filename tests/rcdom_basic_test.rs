@@ -1,6 +1,6 @@
 use html5ever::{namespace_url, parse_document, serialize::{serialize, SerializeOpts}, tendril::{StrTendril, TendrilSink}, Attribute, LocalName, QualName};
-use markup5ever_rcdom::{Node, RcDom, SerializableHandle};
-use std::{ops::{Deref, DerefMut}, rc::Rc};
+use markup5ever_rcdom::{Handle, Node, NodeData, RcDom, SerializableHandle};
+use std::{cell::RefCell, ops::{Deref, DerefMut}, rc::Rc};
 use html5ever::interface::tree_builder::TreeSink;
 
 fn add_attr(node: &Rc<Node>, attr_name: &str, attr_value: &str) {
@@ -20,60 +20,68 @@ fn add_attr(node: &Rc<Node>, attr_name: &str, attr_value: &str) {
   ]);
 }
 
-// fn get_attrs<'a>(attrs_refcell: &'a RefCell<Vec<Attribute>>) -> Vec<(&'a Attribute, String, String)> {
-//   let mut vec: Vec<(&'a Attribute, String, String)> = Vec::new();
-//   // let binding = attrs_refcell.borrow();
-//   let k: std::cell::Ref<'a, Vec<Attribute>> = attrs_refcell.borrow();
-//   let attrs = k.deref();
-//   for attr in attrs {
-//     let name = attr.name.local.to_string();
-//     let value = attr.value.to_string();
-//     vec.push((attr, name, value));
-//   }
-//   vec
-// }
-
 fn get_attr_name_and_value(attribute: &Attribute) -> (String, String) {
   let name = attribute.name.local.to_string();
   let value = attribute.value.to_string();
   (name, value)
 }
 
-// fn parse_attr<'a>(attrs: &'a mut Vec<Attribute>) -> Vec<(&'a mut Attribute, String, String)> {
-//   let mut vec: Vec<(&'a mut Attribute, String, String)> = Vec::new();
-//   for attribute in attrs.deref_mut() {
-//     let name = attribute.name.local.to_string();
-//     let value = attribute.value.to_string();
-//     vec.push((attribute, name, value));
-//   }
-//   vec
-// }
+fn walk(depth: usize, handle: &Handle, vec: Rc<RefCell<Vec<(usize, Rc<Node>)>>>, search_element_name: &str, search_attr_list: &Option<&Vec<(&str, &str)>>) {
+  let node = handle;
+  match node.data {
+    NodeData::Document => println!("#Document"),
+    NodeData::Doctype {
+      ref name,
+      ref public_id,
+      ref system_id,
+    } => println!("<!DOCTYPE {} \"{}\" \"{}\">", name, public_id, system_id),
+    NodeData::Text { ref contents } => {
+      println!("#text: {}", contents.borrow().escape_default())
+    },
+    NodeData::Comment { ref contents } => println!("<!-- {} -->", contents.escape_default()),
+    NodeData::Element {
+      ref name,
+      ref attrs,
+      ..
+    } => {
+      let current_element_name = name.local.to_string();
+      let mut is_required_search_attr = false;
+      let mut is_exist_matched_attr = false;
+      if let Some(search_attrs) = search_attr_list {
+        is_required_search_attr = true;
+        for attr in attrs.borrow().iter() {
+          let (attr_name, attr_value) = get_attr_name_and_value(attr);
+          for search_attr in *search_attrs {
+            if search_attr.0 == attr_name && search_attr.1 == attr_value {
+              is_exist_matched_attr = true;
+              break;
+            }
+          }
+        }
+      }
+      if is_required_search_attr {
+        if current_element_name == search_element_name && is_exist_matched_attr {
+          vec.deref().borrow_mut().push((depth, node.clone()));
+        }
+      } else {
+        if current_element_name == search_element_name {
+          vec.deref().borrow_mut().push((depth, node.clone()));
+        }
+      }
+    },
+    NodeData::ProcessingInstruction { .. } => unreachable!(),
+  }
 
-// fn parse_attr<'a>(attrs: &'a mut Vec<Attribute>) -> Vec<(&'a mut Attribute, String, String)> {
-//   // let k = attrs.deref();
-//   // let mut attr_mutable_list = k;
+  for child in node.children.borrow().iter() {
+    walk(depth + 1, child, vec.clone(), search_element_name, search_attr_list);
+  }
+}
 
-//   let mut vec: Vec<(&'a mut Attribute, String, String)> = Vec::new();
-//   // let list = &mut *attrs;
-//   for attribute in attrs {
-//     let name = attribute.name.local.to_string();
-//     let value = attribute.value.to_string();
-//     vec.push((attribute, name, value));
-//   }
-//   vec
-// }
-
-// fn parse_attr<'a>(attrs: &'a RefCell<Vec<Attribute>>) -> Vec<(&'a Attribute, String, String)> {
-//   let mut vec: Vec<(&'a Attribute, String, String)> = Vec::new();
-//   let k: Ref<'_, Vec<Attribute>> = attrs.borrow();
-//   let list = k.deref();
-//   for attribute in list {
-//     let name = attribute.name.local.to_string();
-//     let value = attribute.value.to_string();
-//     vec.push((attribute, name, value));
-//   }
-//   vec
-// }
+fn node_select(target_node: &Rc<Node>, search_element_name: &str, search_attr_list: &Option<&Vec<(&str, &str)>>) -> Rc<RefCell<Vec<(usize, Rc<Node>)>>> {
+  let vec: Rc<RefCell<Vec<(usize, Rc<Node>)>>> = Rc::new(RefCell::new(vec![]));
+  walk(0, target_node, vec.clone(), search_element_name, search_attr_list);
+  vec
+}
 
 #[test]
 fn rcdom_basic_test() {
@@ -109,18 +117,25 @@ fn rcdom_basic_test() {
   let binding = html.children.borrow();
   let body_rc = binding.last().unwrap();
   let body = body_rc.as_ref();
-  if let markup5ever_rcdom::NodeData::Element{ name, attrs, template_contents, mathml_annotation_xml_integration_point } = &body.data {
+  if let markup5ever_rcdom::NodeData::Element{ name, attrs, template_contents: _, mathml_annotation_xml_integration_point: _ } = &body.data {
+    println!("name: {}", name.local.to_string());
     add_attr(body_rc, "attr1", "my-value");
-    
+
     let mut binding = attrs.borrow_mut();
     let attr_mut_vec = binding.deref_mut();
     for attribute in attr_mut_vec {
-      let (name, value) = get_attr_name_and_value(&attribute);
+      let (name, _) = get_attr_name_and_value(&attribute);
       if name == "attr1" {
         attribute.value.clear();
         attribute.value.push_tendril(&From::from("수정~"));
       }
     }
+  }
+
+  let k = node_select(body_rc, "my-element", &None);
+  let vec = k.deref().borrow();
+  for item in vec.iter() {
+    println!("item: {:#?}", item);
   }
 
   let document: SerializableHandle = dom.document.clone().into();
