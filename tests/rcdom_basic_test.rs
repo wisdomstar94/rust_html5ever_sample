@@ -150,5 +150,5 @@ fn rcdom_basic_test() {
   let document = dom.get_document();
 
   let result = convert_node_to_html_string(&document);
-  println!("result: {:#?}", result);
+  println!("result: {}", result);
 }
